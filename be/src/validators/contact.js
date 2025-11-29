@@ -10,5 +10,5 @@ exports.createContactValidator = [
   body("subject").notEmpty().withMessage("Subject is required"),
   body("message").notEmpty().withMessage("Message is required"),
   body("phone").notEmpty().withMessage("Phone is required"),
-  body("captcha").notEmpty().withMessage("Captcha is required"),
+  // Captcha is optional - no validation required
 ];

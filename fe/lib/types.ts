@@ -33,7 +33,7 @@ export interface CreateContactData {
   subject: string;
   message: string;
   phone: string;
-  captcha: string;
+  captcha?: string;
 }
 
 // Clutch Types

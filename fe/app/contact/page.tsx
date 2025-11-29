@@ -150,13 +150,12 @@ export default function ContactPage() {
 
           <div className="mb-6">
             <label htmlFor="captcha" className="mb-2 block font-medium text-black dark:text-zinc-50">
-              Captcha *
+              Captcha (Optional)
             </label>
             <input
               type="text"
               id="captcha"
               name="captcha"
-              required
               value={formData.captcha}
               onChange={handleChange}
               placeholder="Enter captcha"

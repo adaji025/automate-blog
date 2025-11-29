@@ -13,9 +13,15 @@ export default function BlogListPage() {
   useEffect(() => {
     async function fetchPosts() {
       try {
-        const response = await apiGet<BlogPost[]>('/user/blog/list');
+        const response = await apiGet<any>('/user/blog/list');
         if (response.success && response.data) {
-          setPosts(response.data);
+          // Handle paginated response - extract the data array
+          const postsData = Array.isArray(response.data) 
+            ? response.data 
+            : (response.data.data || []);
+          
+          // Ensure it's always an array
+          setPosts(Array.isArray(postsData) ? postsData : []);
         } else {
           setError(response.message);
         }

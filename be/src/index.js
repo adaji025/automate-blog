@@ -101,7 +101,7 @@ app.use("/api/v1/admin/clutch", adminClutch);
 app.get("/", async (req, res, next) => {
   try {
     await generateSitemap();
-    return handleResponse(res, 200, "Welcome to bles software api");
+    return handleResponse(res, 200, "Welcome to automated blog api");
   } catch (error) {
     return next(error);
   }
