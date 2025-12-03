@@ -14,6 +14,7 @@ export default function BlogListPage() {
     async function fetchPosts() {
       try {
         const response = await apiGet<any>('/user/blog/list');
+        console.log('blog response', response);
         if (response.success && response.data) {
           // Handle paginated response - extract the data array
           const postsData = Array.isArray(response.data) 

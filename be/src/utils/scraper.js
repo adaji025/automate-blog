@@ -214,7 +214,7 @@ async function filterTopArticles(articles) {
       axios.post(
         "https://api.openai.com/v1/chat/completions",
         {
-          model: "o3-mini", // Ensure this model exists; otherwise, use "gpt-3.5-turbo" or another valid model
+          model: "gpt-5-nano",
           messages: [
             {
               role: "system",
@@ -379,7 +379,7 @@ async function enrichWithOpenAI(article) {
       axios.post(
         "https://api.openai.com/v1/chat/completions",
         {
-          model: "o3-mini",
+          model: "gpt-5-nano",
           messages: [
             {
               role: "system",
