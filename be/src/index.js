@@ -37,13 +37,40 @@ app.use(function (req, res, next) {
 });
 
 mongoose.set("debug", true);
-mongoose
-  .connect(process.env.DB_URI)
-  .then(console.log("Database connected"))
-  .catch((err) => {
-    console.log(err);
-    console.error(err);
-  });
+// Disable mongoose buffering to prevent timeout errors
+mongoose.set("bufferCommands", false);
+
+// MongoDB connection options (only valid MongoDB driver options)
+const mongooseOptions = {
+  serverSelectionTimeoutMS: 30000, // 30 seconds
+  socketTimeoutMS: 45000, // 45 seconds
+};
+
+// MongoDB connection function
+async function connectDatabase() {
+  try {
+    await mongoose.connect(process.env.DB_URI, mongooseOptions);
+    console.log("✅ Database connected successfully");
+    
+    // Connection event handlers
+    mongoose.connection.on("error", (err) => {
+      console.error("❌ MongoDB connection error:", err);
+    });
+
+    mongoose.connection.on("disconnected", () => {
+      console.warn("⚠️ MongoDB disconnected");
+    });
+
+    mongoose.connection.on("reconnected", () => {
+      console.log("✅ MongoDB reconnected");
+    });
+
+    return true;
+  } catch (error) {
+    console.error("❌ Database connection failed:", error);
+    throw error;
+  }
+}
 
 const PORT = process.env.PORT || 4000;
 
@@ -171,13 +198,27 @@ process.on("uncaughtException", (e) => {
   debug(e);
 });
 
-app.listen(PORT, async function () {
-  console.log(`Server listening on port ${PORT}.`);
-  // await processBlogPostsInBatchesAndUpsertToPinecone();
+// Start server only after database connection
+async function startServer() {
+  try {
+    // Wait for database connection before starting server
+    await connectDatabase();
+    
+    app.listen(PORT, async function () {
+      console.log(`🚀 Server listening on port ${PORT}.`);
+      // await processBlogPostsInBatchesAndUpsertToPinecone();
 
-  // // every 8 hrs, check google news
-  runBlogAutomation();
+      // // every 8 hrs, check google news
+      runBlogAutomation();
 
-  // // delete bulk blog posts by slug
-  // deleteBulkBlogPostsBySlug();
-});
+      // // delete bulk blog posts by slug
+      // deleteBulkBlogPostsBySlug();
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  }
+}
+
+// Start the application
+startServer();
