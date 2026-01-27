@@ -8,6 +8,20 @@ const { jsonrepair } = require("jsonrepair");
 const { OpenAI } = require("openai");
 const { Pinecone } = require("@pinecone-database/pinecone");
 
+// Validate required environment variables
+if (!process.env.OPENAI_API_KEY) {
+  console.error("❌ OPENAI_API_KEY is not set in environment variables");
+}
+if (!process.env.PINECONE_API_KEY) {
+  console.error("❌ PINECONE_API_KEY is not set in environment variables");
+}
+if (!process.env.PINECONE_INDEX_NAME) {
+  console.error("❌ PINECONE_INDEX_NAME is not set in environment variables");
+}
+if (!process.env.ADMIN_ID) {
+  console.error("❌ ADMIN_ID is not set in environment variables");
+}
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const pinecone = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
 const index = pinecone.Index(process.env.PINECONE_INDEX_NAME);
@@ -191,6 +205,8 @@ function getUniqueSearchTerm() {
 async function fetchAINews() {
   try {
     const searchTerm = getUniqueSearchTerm();
+    console.log(`🔎 Searching Google News with term: "${searchTerm}"`);
+    
     const articles = await googleNewsScraper({
       searchTerm,
       timeframe: "1d",
@@ -199,9 +215,35 @@ async function fetchAINews() {
       getArticleContent: false,
       puppeteerArgs: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
-    return articles.filter((a) => a.title && a.link);
+    
+    console.log(`📥 Raw articles received: ${articles ? articles.length : 0}`);
+    
+    if (!articles || articles.length === 0) {
+      console.warn(`⚠️ No articles found for search term: "${searchTerm}"`);
+      console.warn("💡 Possible issues:");
+      console.warn("   - Google News might be blocking the scraper");
+      console.warn("   - Puppeteer/Chrome might not be installed correctly");
+      console.warn("   - Network connectivity issues");
+      console.warn("   - Search term might not have recent results");
+      return [];
+    }
+    
+    const filteredArticles = articles.filter((a) => a.title && a.link);
+    console.log(`✅ Filtered articles with title and link: ${filteredArticles.length}`);
+    
+    if (filteredArticles.length > 0) {
+      console.log(`📄 Sample article: ${filteredArticles[0].title}`);
+    }
+    
+    return filteredArticles;
   } catch (error) {
-    console.error("Error fetching AI news:", error);
+    console.error("❌ Error fetching AI news:", error.message);
+    console.error("Error stack:", error.stack);
+    console.error("💡 Troubleshooting tips:");
+    console.error("   1. Ensure Puppeteer is installed: npm install puppeteer");
+    console.error("   2. Install Chrome browser for Puppeteer");
+    console.error("   3. Check if Google News is accessible from your network");
+    console.error("   4. Try a different search term");
     return [];
   }
 }
@@ -559,56 +601,97 @@ async function resolveImageUrl(url) {
 
 async function combineAllFunctions() {
   try {
+    console.log("🔍 Step 1: Fetching AI news articles...");
     const articles = await fetchAINews();
+    console.log(`📰 Found ${articles.length} articles from news feed`);
+    
+    if (articles.length === 0) {
+      console.warn("⚠️ No articles fetched from news feed");
+      return [];
+    }
+
+    console.log("🔍 Step 2: Filtering top articles...");
     const topArticles = await filterTopArticles(articles);
+    console.log(`⭐ Selected ${topArticles.length} top article(s) to process`);
+    
+    if (topArticles.length === 0) {
+      console.warn("⚠️ No articles selected after filtering");
+      return [];
+    }
+
+    console.log("🔍 Step 3: Enriching articles with AI...");
     const enrichedArticles = await Promise.allSettled(
       topArticles.map(enrichWithOpenAI)
     );
+    console.log(`✨ Enrichment completed: ${enrichedArticles.length} article(s) processed`);
 
-
+    let createdCount = 0;
     if (enrichedArticles.length > 0) {
       for (const article of enrichedArticles) {
         if (article.status === "fulfilled" && article.value.enrichedContent) {
-          // Resolve the actual image URL before uploading
-          const resolvedImageUrl = await resolveImageUrl(article.value.image);
-          const imageUrl = await uploadImage(
-            resolvedImageUrl,
-            "bles-software-blog",
-            "raw"
-          );
-          const dataToCreate = {
-            title: article.value.enrichedTitle || article.value.title,
-            content: article.value.enrichedContent,
-            status: "published",
-            duration: "5 minutes",
-          };
-          const assets = [
-            { url: imageUrl.secureUrl, imgId: imageUrl.publicId },
-          ];
+          try {
+            console.log(`📝 Processing article: ${article.value.enrichedTitle || article.value.title}`);
+            
+            // Resolve the actual image URL before uploading
+            console.log("🖼️ Resolving image URL...");
+            const resolvedImageUrl = await resolveImageUrl(article.value.image);
+            
+            console.log("☁️ Uploading image to Cloudinary...");
+            const imageUrl = await uploadImage(
+              resolvedImageUrl,
+              "bles-software-blog",
+              "raw"
+            );
+            
+            const dataToCreate = {
+              title: article.value.enrichedTitle || article.value.title,
+              content: article.value.enrichedContent,
+              status: "published",
+              duration: "5 minutes",
+            };
+            const assets = [
+              { url: imageUrl.secureUrl, imgId: imageUrl.publicId },
+            ];
 
-          // save article to db
-          const createdBlog = await BlogPost.create({
-            ...dataToCreate,
-            authorId: process.env.ADMIN_ID,
-            assets,
-            canonicalUrl:
-              "https://bles-software.com/blog/developing-ai-chatbots-for-enhanced-customer-engagement-in-b2b",
-          });
+            console.log("💾 Saving blog post to database...");
+            // save article to db
+            const createdBlog = await BlogPost.create({
+              ...dataToCreate,
+              authorId: process.env.ADMIN_ID,
+              assets,
+              canonicalUrl:
+                "https://bles-software.com/blog/developing-ai-chatbots-for-enhanced-customer-engagement-in-b2b",
+            });
+            console.log(`✅ Blog post created with ID: ${createdBlog._id}`);
 
-          // upsert to pinecone
-          await upsertArticles([createdBlog]);
+            // upsert to pinecone
+            console.log("🔍 Upserting to Pinecone...");
+            await upsertArticles([createdBlog]);
+            createdCount++;
+          } catch (articleError) {
+            console.error(`❌ Error processing article:`, articleError);
+          }
         } else {
-          console.error("No enriched content generated, skipping blog creation.");
+          if (article.status === "rejected") {
+            console.error(`❌ Article enrichment failed:`, article.reason);
+          } else {
+            console.error("⚠️ No enriched content generated, skipping blog creation.");
+          }
         }
       }
     }
 
+    console.log(`📊 Created ${createdCount} blog post(s) successfully`);
+
     // update sitemap
+    console.log("🗺️ Updating sitemap...");
     await generateSitemap();
+    console.log("✅ Sitemap updated");
 
     return enrichedArticles;
   } catch (error) {
-    console.error("Error combining all functions:", error);
+    console.error("❌ Error combining all functions:", error);
+    console.error("Error stack:", error.stack);
     return [];
   }
 }
