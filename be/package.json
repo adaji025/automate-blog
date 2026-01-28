@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "cd ./src && nodemon index.js",
-    "install-puppeteer": "npx puppeteer browsers install chrome"
+    "install-puppeteer": "npx puppeteer browsers install chrome",
+    "seed:blog": "node src/seeders/blogSeeder.js",
+    "seed:blog:single": "node src/seeders/blogSeeder.js 1"
   },
   "author": "",
   "license": "ISC",
